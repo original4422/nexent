@@ -30,6 +30,7 @@ import {
   Plug,
   BlocksIcon,
   Globe,
+  Tag,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -151,6 +152,23 @@ export default function AgentConfigComp() {
               <h2 className="text-[16px] font-medium">
                 {t("businessLogic.config.title")}
               </h2>
+              {currentAgentId !== null && !isCreatingMode ? (
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<Tag size={15} />}
+                  disabled={isReadOnly}
+                  onClick={() => {
+                    setAssignTarget({
+                      resourceType: "agent",
+                      ids: [String(currentAgentId)],
+                    });
+                    setAssignTagsOpen(true);
+                  }}
+                >
+                  {t("agent.action.assignTags")}
+                </Button>
+              ) : null}
             </Flex>
           </Col>
         </Row>
@@ -384,7 +402,7 @@ export default function AgentConfigComp() {
         open={assignTagsOpen}
         onClose={() => setAssignTagsOpen(false)}
         resourceType={assignTarget.resourceType}
-        resourceId=""
+        resourceId={assignTarget.ids.length === 1 ? assignTarget.ids[0] : ""}
         definitions={assignDefinitions ?? []}
         canEdit={!isReadOnly}
         bulkResourceIds={assignTarget.ids}

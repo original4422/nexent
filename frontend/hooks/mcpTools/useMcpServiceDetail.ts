@@ -14,7 +14,7 @@ import {
   updateMcpToolService,
 } from "@/services/mcpToolsService";
 import { refreshToolListWithToast } from "./useRefreshToolListWithToast";
-import { isHttpUrl, isSameStringArray } from "@/lib/mcpTools";
+import { isHttpUrl } from "@/lib/mcpTools";
 import { McpHealthStatus, McpTransportType } from "@/const/mcpTools";
 import type { McpServiceItem } from "@/types/mcpTools";
 import type { McpTool } from "@/types/agentConfig";
@@ -55,7 +55,6 @@ export function useMcpServiceDetail({
   const [publishing, setPublishing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [tagSaving, setTagSaving] = useState(false);
 
   useEffect(() => {
     if (selectedService) {
@@ -72,60 +71,6 @@ export function useMcpServiceDetail({
     queryClient.invalidateQueries({ queryKey: MCP_TOOLS_QUERY_KEYS.services });
     queryClient.invalidateQueries({ queryKey: MCP_SERVERS_QUERY_KEY });
   }, [queryClient]);
-
-  const updateTagsToServer = useCallback(async (newTags: string[]) => {
-    const currentDraft = draftRef.current;
-    if (!currentDraft) return;
-    setTagSaving(true);
-    try {
-      await updateMcpToolService({
-        mcp_id: currentDraft.mcpId,
-        name: currentDraft.name.trim(),
-        description: currentDraft.description,
-        server_url: (currentDraft.serverUrl || "").trim(),
-        tags: newTags,
-        version: currentDraft.version,
-        authorization_token: (currentDraft.authorizationToken ?? "").trim() || undefined,
-        custom_headers: currentDraft.customHeaders,
-        group_ids: currentDraft.groupIds ?? undefined,
-        ingroup_permission: currentDraft.ingroupPermission ?? undefined,
-      });
-      // Update local state
-      setDraft((prev) => {
-        const updated = prev ? { ...prev, tags: newTags } : prev;
-        draftRef.current = updated;
-        return updated;
-      });
-      invalidateServices();
-    } catch (error) {
-      log.error("[useMcpServiceDetail] Update tags failed", { error });
-      message.error(t("mcpTools.service.saveFailed"));
-      // Revert local state on error
-      setDraft((prev) => {
-        const reverted = prev ? { ...prev, tags: currentDraft.tags } : prev;
-        draftRef.current = reverted;
-        return reverted;
-      });
-    } finally {
-      setTagSaving(false);
-    }
-  }, [invalidateServices, message, t]);
-
-  const addTag = useCallback((tag: string) => {
-    const next = tag.trim();
-    if (!next) return;
-    const currentDraft = draftRef.current;
-    if (!currentDraft) return;
-    if (currentDraft.tags.includes(next)) return;
-    updateTagsToServer([...currentDraft.tags, next]);
-  }, [updateTagsToServer]);
-
-  const removeTag = useCallback((index: number) => {
-    const currentDraft = draftRef.current;
-    if (!currentDraft) return;
-    const newTags = currentDraft.tags.filter((_, i) => i !== index);
-    updateTagsToServer(newTags);
-  }, [updateTagsToServer]);
 
   const runHealthCheck = useCallback(async () => {
     if (!draft || draft.mcpId < 0) return;
@@ -186,7 +131,6 @@ export function useMcpServiceDetail({
       draft.name.trim() !== selectedService.name ||
       draft.description !== selectedService.description ||
       draft.serverUrl.trim() !== selectedService.serverUrl ||
-      !isSameStringArray(draft.tags, selectedService.tags) ||
       (draft.authorizationToken ?? "") !==
         (selectedService.authorizationToken ?? "") ||
       (draft.version ?? "") !== (selectedService.version ?? "")
@@ -200,7 +144,6 @@ export function useMcpServiceDetail({
     const nextName = currentDraft.name.trim();
     const nextUrl = (currentDraft.serverUrl || "").trim();
     const nextToken = (currentDraft.authorizationToken ?? "").trim();
-    const nextTags = currentDraft.tags;
 
     if (!nextName) {
       message.warning(t("mcpTools.add.validate.nameRequired"));
@@ -219,7 +162,6 @@ export function useMcpServiceDetail({
         name: nextName,
         description: currentDraft.description,
         server_url: nextUrl,
-        tags: nextTags,
         version: currentDraft.version,
         authorization_token: nextToken || undefined,
         custom_headers: currentDraft.customHeaders,
@@ -349,9 +291,6 @@ export function useMcpServiceDetail({
         return next;
       });
     }) as typeof setDraft,
-    addTag,
-    removeTag,
-    tagSaving,
     hasUnsavedChanges,
     healthChecking,
     runHealthCheck,

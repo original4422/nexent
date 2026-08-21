@@ -42,7 +42,7 @@ type ApiEnvelope<T = unknown> = {
 type AddContainerMcpToolPayload = {
   name: string;
   description?: string;
-  tags: string[];
+  tags?: string[];
   source: McpSource;
   authorization_token?: string;
   registry_json?: Record<string, unknown>;

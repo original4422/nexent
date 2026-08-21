@@ -25,7 +25,6 @@ import { Can } from "@/components/permission/Can";
 import McpContainerLogsModal from "@/components/mcp/McpContainerLogsModal";
 import McpToolListModal from "@/components/mcp/McpToolListModal";
 import ContainerPortField from "./shared/ContainerPortField";
-import TagEditor from "./shared/TagEditor";
 import ResourceTagAssignmentModal from "@/components/tag/ResourceTagAssignmentModal";
 import { useTagDefinitions, useTagLibraries } from "@/hooks/useTagManagement";
 import JsonPreviewModal from "./shared/JsonPreviewModal";
@@ -75,7 +74,6 @@ export default function McpServiceDetailModal({
   const [deploymentType, setDeploymentType] = useState<McpDeploymentType>(
     McpDeploymentType.REMOTE_LINK
   );
-  const [draftTags, setDraftTags] = useState<string[]>([]);
   const [assignOpen, setAssignOpen] = useState(false);
   const { data: tagLibraries } = useTagLibraries();
   const defaultLibrary =
@@ -116,7 +114,6 @@ export default function McpServiceDetailModal({
       source: draft.source,
     });
     setDeploymentType(nextDeploymentType);
-    setDraftTags(draft.tags ?? []);
     setContainerPort(draft.containerPort);
     form.setFieldsValue({
       name: draft.name,
@@ -149,16 +146,6 @@ export default function McpServiceDetailModal({
   const isReadOnly = selectedService?.permission === "READ_ONLY";
   const hasRegistryJson = Boolean(draft.registryJson);
   const hasConfigJson = Boolean(draft.configJson);
-
-  const addTag = (tag: string) => {
-    const next = tag.trim();
-    if (!next || draftTags.includes(next)) return;
-    setDraftTags((prev) => [...prev, next]);
-  };
-
-  const removeTag = (index: number) => {
-    setDraftTags((prev) => prev.filter((_, i) => i !== index));
-  };
 
   const handleSave = async () => {
     if (isUnsupported || isReadOnly) return;
@@ -214,7 +201,6 @@ export default function McpServiceDetailModal({
       authorizationToken: values.authorizationToken ?? "",
       customHeaders: parsedCustomHeaders,
       configJson: parsedConfigJson,
-      tags: draftTags,
     };
     detail.setDraft(nextDraft);
     const ok = await detail.save(nextDraft);
@@ -670,16 +656,6 @@ export default function McpServiceDetailModal({
             >
               {t("mcpTools.action.assignTags")}
             </Button>
-
-            <TagEditor
-              title={t("mcpTools.detail.tags")}
-              titleClassName="mb-1 block text-sm font-medium text-slate-700"
-              tags={draftTags}
-              onAddTag={(tag) => addTag(tag || "")}
-              onRemoveTag={removeTag}
-              removeAriaKey="mcpTools.detail.removeTagAria"
-              placeholderKey="mcpTools.detail.tagInputPlaceholder"
-            />
           </Form>
 
           <div className="flex flex-col gap-y-3 border-t border-slate-100 bg-white px-6 py-4">

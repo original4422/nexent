@@ -1404,6 +1404,10 @@ const DocumentListContainer = forwardRef<DocumentListRef, DocumentListProps>(
           canEdit={assignTarget?.canEdit ?? false}
           provider="local"
           knowledgeBaseId={knowledgeBaseId}
+          onManageDefinitions={() => {
+            setAssignTarget(null);
+            setTagManagementOpen(true);
+          }}
         />
 
         {selectedFile && (
