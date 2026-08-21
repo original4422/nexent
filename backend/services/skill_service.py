@@ -2026,6 +2026,7 @@ class SkillService:
         if not effective_tenant_id:
             raise SkillException("tenant_id is required")
         try:
+            skill = skill_db.get_skill_by_name(skill_name, effective_tenant_id)
             # Delete local skill files from filesystem
             skill_dir = os.path.join(self._local_skills_dir(effective_tenant_id), skill_name)
             if os.path.exists(skill_dir):
@@ -2034,7 +2035,14 @@ class SkillService:
                 logger.info(f"Deleted skill directory: {skill_dir}")
 
             # Delete from database (soft delete with updated_by)
-            return skill_db.delete_skill(skill_name, effective_tenant_id, updated_by=user_id)
+            deleted = skill_db.delete_skill(skill_name, effective_tenant_id, updated_by=user_id)
+            if deleted and skill:
+                from services.tag_management_service import TagManagementService
+
+                TagManagementService.cleanup_resource_assignments(
+                    effective_tenant_id, "skill", str(skill["skill_id"]), user_id or ""
+                )
+            return deleted
         except Exception as e:
             logger.error(f"Error deleting skill {skill_name}: {e}")
             raise SkillException(f"Failed to delete skill: {str(e)}") from e

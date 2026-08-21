@@ -1,9 +1,9 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import log from "@/lib/logger";
 
-import { Button, Input, Select, Tooltip } from "antd";
+import { Button, Input, Popover, Select, Tooltip } from "antd";
 import {
   SyncOutlined,
   PlusOutlined,
@@ -13,6 +13,7 @@ import {
 } from "@ant-design/icons";
 import {
   PencilRuler,
+  Tag,
   Eye,
   Glasses,
   Trash2,
@@ -23,6 +24,14 @@ import { Can } from "@/components/permission/Can";
 import { useAuthorizationContext } from "@/components/providers/AuthorizationProvider";
 import { useGroupList } from "@/hooks/group/useGroupList";
 import { KnowledgeBaseEditModal } from "./KnowledgeBaseEditModal";
+import ResourceTagAssignmentModal from "@/components/tag/ResourceTagAssignmentModal";
+import TagDefinitionManagementModal from "@/components/tag/TagDefinitionManagementModal";
+import { useTagDefinitions, useTagLibraries } from "@/hooks/useTagManagement";
+import TagFilterControls from "@/components/tag/TagFilterControls";
+import TagChips from "@/components/tag/TagChips";
+import ResourceTagChips from "@/components/tag/ResourceTagChips";
+import { tagManagementApi } from "@/services/tagManagementService";
+import type { TagResourcePredicate } from "@/types/tagManagement";
 
 import { KnowledgeBase } from "@/types/knowledgeBase";
 import { KB_LAYOUT, KB_TAG_VARIANTS } from "@/const/knowledgeBaseLayout";
@@ -137,6 +146,50 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
 
   // Edit modal states
   const [editModalVisible, setEditModalVisible] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<{
+    indexName: string;
+    canEdit: boolean;
+  } | null>(null);
+  const [tagManagementOpen, setTagManagementOpen] = useState(false);
+  const [tagPredicates, setTagPredicates] = useState<TagResourcePredicate[]>([]);
+  const [matchedTagIds, setMatchedTagIds] = useState<Set<string> | null>(null);
+  const { data: tagLibraries } = useTagLibraries();
+  const defaultLibrary =
+    tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
+  const { data: assignDefinitions } = useTagDefinitions(
+    defaultLibrary?.bucket_id ?? null
+  );
+
+  // Narrow the already-authorized knowledge base ids by tag predicates. The
+  // tag service only intersects the caller's authorized set, so it never
+  // widens scope. Empty predicates clear the filter (show everything).
+  useEffect(() => {
+    if (tagPredicates.length === 0) {
+      setMatchedTagIds(null);
+      return;
+    }
+    const resourceIds = knowledgeBases.map((kb) => String(kb.id));
+    if (resourceIds.length === 0) {
+      setMatchedTagIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    tagManagementApi
+      .filterResourceIds("knowledge_base", resourceIds, tagPredicates)
+      .then((result) => {
+        if (cancelled) return;
+        setMatchedTagIds(new Set(result.matched_resource_ids));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        // Fail closed: show nothing rather than widening scope on error.
+        setMatchedTagIds(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tagPredicates, knowledgeBases]);
+
   const [editingKnowledge, setEditingKnowledge] =
     useState<KnowledgeBase | null>(null);
 
@@ -250,7 +303,11 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
         effectiveSelectedModels.length === 0 ||
         effectiveSelectedModels.includes(kb.embeddingModel);
 
-      const matches = matchesSearch && matchesSource && matchesModel;
+      // Structured tag filter (null = no tag predicate active)
+      const matchesTag =
+        matchedTagIds === null || matchedTagIds.has(String(kb.id));
+
+      const matches = matchesSearch && matchesSource && matchesModel && matchesTag;
 
       if (!matches) {
         log.log("KB filtered out:", {
@@ -273,6 +330,7 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
     effectiveSearchKeyword,
     effectiveSelectedSources,
     effectiveSelectedModels,
+    matchedTagIds,
   ]);
 
   return (
@@ -289,7 +347,10 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
               {t("knowledgeBase.list.title")}
             </h3>
           </div>
-          <div className="flex items-center min-w-0 overflow-x-auto" style={{ gap: "6px" }}>
+          <div
+            className="flex items-center min-w-0 overflow-x-auto"
+            style={{ gap: "6px" }}
+          >
             <Button
               style={{
                 padding: "4px 15px",
@@ -337,6 +398,20 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
                 <SyncOutlined spin={syncLoading} style={{ color: "white" }} />
               </span>
               <span>{t("knowledgeBase.button.sync")}</span>
+            </Button>
+            <Button
+              style={{
+                padding: "4px 15px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                flexShrink: 0,
+              }}
+              onClick={() => setTagManagementOpen(true)}
+              icon={<Tag />}
+            >
+              {t("knowledgeBase.button.tagManagement")}
             </Button>
             {showDataMateConfig && (
               <Button
@@ -411,6 +486,41 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
               ))}
             </Select>
           )}
+
+          {defaultLibrary && assignDefinitions && (
+            <Popover
+              trigger="click"
+              placement="bottomRight"
+              title={t("knowledgeBase.tagFilter.placeholder")}
+              content={
+                <div className="w-64">
+                  <TagFilterControls
+                    definitions={assignDefinitions}
+                    value={tagPredicates}
+                    onChange={setTagPredicates}
+                  />
+                  {tagPredicates.length > 0 && (
+                    <Button
+                      size="small"
+                      block
+                      className="mt-2"
+                      onClick={() => setTagPredicates([])}
+                    >
+                      {t("knowledgeBase.tagFilter.clear")}
+                    </Button>
+                  )}
+                </div>
+              }
+            >
+              <Button
+                icon={<FilterOutlined />}
+                type={tagPredicates.length > 0 ? "primary" : "default"}
+                aria-label={t("knowledgeBase.tagFilter.placeholder")}
+              >
+                {t("knowledgeBase.tagFilter.button")}
+              </Button>
+            </Popover>
+          )}
         </div>
       </div>
 
@@ -458,35 +568,59 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
                           {/* Permission icon with tooltip */}
                           <Can permission="kb.groups:read">
                             <Tooltip
-                              title={t(getPermissionTooltipKey(kb.ingroup_permission || ""))}
+                              title={t(
+                                getPermissionTooltipKey(
+                                  kb.ingroup_permission || ""
+                                )
+                              )}
                               placement="top"
                             >
                               <div className="ml-3 flex-shrink-0 cursor-pointer">
                                 <div className="flex items-center justify-center w-5 h-5 rounded-full bg-gray-200 hover:bg-gray-300 transition-all duration-200 hover:shadow-sm">
-                                  {getPermissionIcon(kb.ingroup_permission || "")}
+                                  {getPermissionIcon(
+                                    kb.ingroup_permission || ""
+                                  )}
                                 </div>
                               </div>
                             </Tooltip>
                           </Can>
                         </div>
-                          <div className="flex items-center ml-2">
+                        <div className="flex items-center ml-2">
                           <Can permission="kb:update">
+                            <Tooltip
+                              title={t("knowledgeBase.action.assignTags")}
+                            >
+                              <Button
+                                type="text"
+                                icon={<Tag className="h-4 w-4" />}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAssignTarget({
+                                    indexName: kb.id,
+                                    canEdit: kb.permission !== "READ_ONLY",
+                                  });
+                                }}
+                                size="small"
+                              />
+                            </Tooltip>
                             {/* Edit button - only show for Nexent (local) sources and when user has edit permission */}
-                            {(!kb.source || kb.source === "nexent" || kb.source === "elasticsearch") &&
+                            {(!kb.source ||
+                              kb.source === "nexent" ||
+                              kb.source === "elasticsearch") &&
                               kb.permission !== "READ_ONLY" && (
-                              <Tooltip title={t("common.edit")}>
-                                <Button
-                                  type="text"
-                                  icon={<SquarePen className="h-4 w-4" />}
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openEditModal(kb);
-                                  }}
-                                  size="small"
-                                />
-                              </Tooltip>
-                            )}
-                            </Can>
+                                <Tooltip title={t("common.edit")}>
+                                  <Button
+                                    type="text"
+                                    icon={<SquarePen className="h-4 w-4" />}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openEditModal(kb);
+                                    }}
+                                    size="small"
+                                  />
+                                </Tooltip>
+                              )}
+                          </Can>
                           <Can permission="kb:delete">
                             {/* Delete button - hide when user has READ_ONLY permission */}
                             {kb.permission !== "READ_ONLY" && (
@@ -503,9 +637,8 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
                                 />
                               </Tooltip>
                             )}
-                            </Can>
-                          </div>
-
+                          </Can>
+                        </div>
                       </div>
                       <div
                         className={`flex flex-wrap items-center ${KB_LAYOUT.TAG_MARGIN} ${KB_LAYOUT.TAG_SPACING}`}
@@ -526,6 +659,16 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
                           {t("knowledgeBase.tag.chunks", {
                             count: kb.chunkCount || 0,
                           })}
+                        </span>
+
+                        {/* Structured tag chips: value-only with the tag name
+                            preserved in the tooltip and accessibility label. */}
+                        <span className="inline-flex items-center mr-1">
+                          <ResourceTagChips
+                            resourceType="knowledge_base"
+                            resourceId={kb.id}
+                            max={3}
+                          />
                         </span>
 
                         {/* Always show source tag regardless of document/chunk count */}
@@ -555,7 +698,7 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
                               className={`w-full ${KB_LAYOUT.TAG_BREAK_HEIGHT}`}
                             ></div>
 
-{/* Model tag - only show when model is not "unknown" */}
+                            {/* Model tag - only show when model is not "unknown" */}
                             {kb.embeddingModel !== "unknown" && (
                               <span
                                 className={`inline-flex items-center ${KB_LAYOUT.TAG_PADDING} ${KB_LAYOUT.TAG_ROUNDED} ${KB_LAYOUT.TAG_TEXT} ${KB_LAYOUT.SECOND_ROW_TAG_MARGIN} ${KB_TAG_VARIANTS.model} mr-1`}
@@ -567,26 +710,28 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
                             )}
                             {kb.is_multimodal &&
                               hasIndexedDocumentsAndChunks(kb) && (
-                              <span
-                                className={`inline-flex items-center ${KB_LAYOUT.TAG_PADDING} ${KB_LAYOUT.TAG_ROUNDED} ${KB_LAYOUT.TAG_TEXT} ${KB_LAYOUT.SECOND_ROW_TAG_MARGIN} ${KB_TAG_VARIANTS.red} mr-1`}
-                              >
-                                multimodal
-                              </span>
-                            )}
+                                <span
+                                  className={`inline-flex items-center ${KB_LAYOUT.TAG_PADDING} ${KB_LAYOUT.TAG_ROUNDED} ${KB_LAYOUT.TAG_TEXT} ${KB_LAYOUT.SECOND_ROW_TAG_MARGIN} ${KB_TAG_VARIANTS.red} mr-1`}
+                                >
+                                  multimodal
+                                </span>
+                              )}
 
                             {/* Model mismatch is shown in the knowledge-base detail header only. */}
 
                             {/* User group tags - only show when not PRIVATE */}
                             <Can permission="group:read">
                               {kb.ingroup_permission !== "PRIVATE" &&
-                                getGroupNames(kb.group_ids).map((groupName, idx) => (
-                                  <span
-                                    key={idx}
-                                    className={`inline-flex items-center ${KB_LAYOUT.TAG_PADDING} ${KB_LAYOUT.TAG_ROUNDED} ${KB_LAYOUT.TAG_TEXT} ${KB_LAYOUT.SECOND_ROW_TAG_MARGIN} bg-blue-100 text-blue-800 border border-blue-200 mr-1`}
-                                  >
-                                    {groupName}
-                                  </span>
-                                ))}
+                                getGroupNames(kb.group_ids).map(
+                                  (groupName, idx) => (
+                                    <span
+                                      key={idx}
+                                      className={`inline-flex items-center ${KB_LAYOUT.TAG_PADDING} ${KB_LAYOUT.TAG_ROUNDED} ${KB_LAYOUT.TAG_TEXT} ${KB_LAYOUT.SECOND_ROW_TAG_MARGIN} bg-blue-100 text-blue-800 border border-blue-200 mr-1`}
+                                    >
+                                      {groupName}
+                                    </span>
+                                  )
+                                )}
                             </Can>
                             {kb.preserve_source_file === false && (
                               <span
@@ -628,6 +773,23 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
             onKnowledgeBaseUpdate(updatedKnowledgeBase);
           }
         }}
+      />
+
+      <ResourceTagAssignmentModal
+        open={assignTarget !== null}
+        onClose={() => setAssignTarget(null)}
+        resourceType="knowledge_base"
+        resourceId={assignTarget?.indexName ?? ""}
+        definitions={assignDefinitions ?? []}
+        canEdit={assignTarget?.canEdit ?? false}
+      />
+
+      <TagDefinitionManagementModal
+        open={tagManagementOpen}
+        onClose={() => setTagManagementOpen(false)}
+        bucketId={defaultLibrary?.bucket_id ?? 0}
+        bucketName={defaultLibrary?.bucket_name ?? ""}
+        canManage={true}
       />
     </div>
   );

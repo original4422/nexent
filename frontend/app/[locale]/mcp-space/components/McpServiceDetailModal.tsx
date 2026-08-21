@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Alert, App, Button, Form, Input, Modal, Select } from "antd";
-import { ApiOutlined, CloudOutlined, ContainerOutlined, LinkOutlined } from "@ant-design/icons";
+import {
+  ApiOutlined,
+  CloudOutlined,
+  ContainerOutlined,
+  LinkOutlined,
+  TagsOutlined,
+} from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
 import {
   McpDeploymentType,
@@ -20,6 +26,8 @@ import McpContainerLogsModal from "@/components/mcp/McpContainerLogsModal";
 import McpToolListModal from "@/components/mcp/McpToolListModal";
 import ContainerPortField from "./shared/ContainerPortField";
 import TagEditor from "./shared/TagEditor";
+import ResourceTagAssignmentModal from "@/components/tag/ResourceTagAssignmentModal";
+import { useTagDefinitions, useTagLibraries } from "@/hooks/useTagManagement";
 import JsonPreviewModal from "./shared/JsonPreviewModal";
 import PublishConfirmModal from "./PublishConfirmModal";
 
@@ -68,6 +76,13 @@ export default function McpServiceDetailModal({
     McpDeploymentType.REMOTE_LINK
   );
   const [draftTags, setDraftTags] = useState<string[]>([]);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const { data: tagLibraries } = useTagLibraries();
+  const defaultLibrary =
+    tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
+  const { data: assignDefinitions } = useTagDefinitions(
+    defaultLibrary?.bucket_id ?? null
+  );
   const [containerPort, setContainerPort] = useState<number | undefined>();
 
   const detail = useMcpServiceDetail({ selectedService, onClose });
@@ -109,11 +124,15 @@ export default function McpServiceDetailModal({
       version: draft.version,
       serverUrl: draft.serverUrl,
       authorizationToken: draft.authorizationToken ?? "",
-      customHeaders: draft.customHeaders ? JSON.stringify(draft.customHeaders, null, 2) : "",
+      customHeaders: draft.customHeaders
+        ? JSON.stringify(draft.customHeaders, null, 2)
+        : "",
       openApiJson: toPrettyRegistryJson(draft.configJson),
       containerConfigJson: toPrettyRegistryJson(draft.configJson),
       containerPort: draft.containerPort,
-      group_ids: draft.groupIds ? draft.groupIds.split(",").map(Number).filter(Boolean) : undefined,
+      group_ids: draft.groupIds
+        ? draft.groupIds.split(",").map(Number).filter(Boolean)
+        : undefined,
       ingroup_permission: draft.ingroupPermission || "READ_ONLY",
     });
   }, [draft, form]);
@@ -126,8 +145,7 @@ export default function McpServiceDetailModal({
   const isContainer = deploymentType === McpDeploymentType.CONTAINER;
   const isApi = deploymentType === McpDeploymentType.API;
   const isLocalImage = deploymentType === McpDeploymentType.LOCAL_IMAGE;
-  const isUnsupported =
-    deploymentType !== originalDeploymentType;
+  const isUnsupported = deploymentType !== originalDeploymentType;
   const isReadOnly = selectedService?.permission === "READ_ONLY";
   const hasRegistryJson = Boolean(draft.registryJson);
   const hasConfigJson = Boolean(draft.configJson);
@@ -176,7 +194,9 @@ export default function McpServiceDetailModal({
     }
     if (isContainer) {
       try {
-        parsedConfigJson = JSON.parse(String(values.containerConfigJson || "").trim());
+        parsedConfigJson = JSON.parse(
+          String(values.containerConfigJson || "").trim()
+        );
       } catch {
         modal.error({
           content: t("mcpTools.add.error.containerJsonInvalid"),
@@ -237,7 +257,10 @@ export default function McpServiceDetailModal({
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                 <div className="flex items-center gap-3">
                   {(() => {
-                    const opt = DEPLOYMENT_OPTIONS.find(o => o.value === originalDeploymentType) || DEPLOYMENT_OPTIONS[0];
+                    const opt =
+                      DEPLOYMENT_OPTIONS.find(
+                        (o) => o.value === originalDeploymentType
+                      ) || DEPLOYMENT_OPTIONS[0];
                     const Icon = opt.Icon;
                     return (
                       <div className="flex items-center gap-2 text-sm text-slate-700">
@@ -314,8 +337,13 @@ export default function McpServiceDetailModal({
                           checked={draft.sharedFields?.["serverUrl"] ?? false}
                           disabled={isReadOnly}
                           onChange={(e) => {
-                            const next = { ...(draft.sharedFields || {}), serverUrl: e.target.checked };
-                            setDraft((prev) => prev ? { ...prev, sharedFields: next } : prev);
+                            const next = {
+                              ...(draft.sharedFields || {}),
+                              serverUrl: e.target.checked,
+                            };
+                            setDraft((prev) =>
+                              prev ? { ...prev, sharedFields: next } : prev
+                            );
                           }}
                         />
                         {t("mcpTools.detail.share")}
@@ -335,7 +363,9 @@ export default function McpServiceDetailModal({
                       >
                         <Input
                           className="w-full rounded-md"
-                          placeholder={t("mcpTools.addModal.bearerTokenPlaceholder")}
+                          placeholder={t(
+                            "mcpTools.addModal.bearerTokenPlaceholder"
+                          )}
                           disabled={isReadOnly}
                         />
                       </Form.Item>
@@ -343,11 +373,18 @@ export default function McpServiceDetailModal({
                         <input
                           type="checkbox"
                           className="rounded border-slate-300"
-                          checked={draft.sharedFields?.["authorizationToken"] ?? false}
+                          checked={
+                            draft.sharedFields?.["authorizationToken"] ?? false
+                          }
                           disabled={isReadOnly}
                           onChange={(e) => {
-                            const next = { ...(draft.sharedFields || {}), authorizationToken: e.target.checked };
-                            setDraft((prev) => prev ? { ...prev, sharedFields: next } : prev);
+                            const next = {
+                              ...(draft.sharedFields || {}),
+                              authorizationToken: e.target.checked,
+                            };
+                            setDraft((prev) =>
+                              prev ? { ...prev, sharedFields: next } : prev
+                            );
                           }}
                         />
                         {t("mcpTools.detail.share")}
@@ -364,7 +401,9 @@ export default function McpServiceDetailModal({
                         <Input.TextArea
                           rows={2}
                           className="w-full rounded-md"
-                          placeholder={t("mcpTools.addModal.customHeadersPlaceholder")}
+                          placeholder={t(
+                            "mcpTools.addModal.customHeadersPlaceholder"
+                          )}
                           disabled={isReadOnly}
                         />
                       </Form.Item>
@@ -372,11 +411,18 @@ export default function McpServiceDetailModal({
                         <input
                           type="checkbox"
                           className="rounded border-slate-300"
-                          checked={draft.sharedFields?.["customHeaders"] ?? false}
+                          checked={
+                            draft.sharedFields?.["customHeaders"] ?? false
+                          }
                           disabled={isReadOnly}
                           onChange={(e) => {
-                            const next = { ...(draft.sharedFields || {}), customHeaders: e.target.checked };
-                            setDraft((prev) => prev ? { ...prev, sharedFields: next } : prev);
+                            const next = {
+                              ...(draft.sharedFields || {}),
+                              customHeaders: e.target.checked,
+                            };
+                            setDraft((prev) =>
+                              prev ? { ...prev, sharedFields: next } : prev
+                            );
                           }}
                         />
                         {t("mcpTools.detail.share")}
@@ -404,7 +450,9 @@ export default function McpServiceDetailModal({
                     >
                       <Input
                         className="w-full rounded-md"
-                        placeholder={t("mcpConfig.openapiService.form.serverUrlPlaceholder")}
+                        placeholder={t(
+                          "mcpConfig.openapiService.form.serverUrlPlaceholder"
+                        )}
                         disabled={isReadOnly}
                       />
                     </Form.Item>
@@ -418,7 +466,9 @@ export default function McpServiceDetailModal({
                       <Input.TextArea
                         rows={2}
                         className="w-full rounded-md"
-                        placeholder={t("mcpConfig.addServer.customHeadersPlaceholder")}
+                        placeholder={t(
+                          "mcpConfig.addServer.customHeadersPlaceholder"
+                        )}
                         disabled={isReadOnly}
                       />
                     </Form.Item>
@@ -432,7 +482,9 @@ export default function McpServiceDetailModal({
                       <Input.TextArea
                         rows={6}
                         className="w-full rounded-md"
-                        placeholder={t("mcpConfig.openApiToMcp.jsonPlaceholder")}
+                        placeholder={t(
+                          "mcpConfig.openApiToMcp.jsonPlaceholder"
+                        )}
                         disabled={isReadOnly}
                       />
                     </Form.Item>
@@ -452,11 +504,16 @@ export default function McpServiceDetailModal({
                       {t("mcpTools.addModal.containerConfig")}
                     </label>
                     <div className="flex items-center gap-2">
-                      <Form.Item name="containerConfigJson" className="mb-0 flex-1">
+                      <Form.Item
+                        name="containerConfigJson"
+                        className="mb-0 flex-1"
+                      >
                         <Input.TextArea
                           rows={5}
                           className="w-full rounded-md bg-white text-slate-600"
-                          placeholder={t("mcpTools.addModal.containerConfigPlaceholder")}
+                          placeholder={t(
+                            "mcpTools.addModal.containerConfigPlaceholder"
+                          )}
                           disabled={isReadOnly}
                         />
                       </Form.Item>
@@ -464,11 +521,18 @@ export default function McpServiceDetailModal({
                         <input
                           type="checkbox"
                           className="rounded border-slate-300"
-                          checked={draft.sharedFields?.["containerConfigJson"] ?? false}
+                          checked={
+                            draft.sharedFields?.["containerConfigJson"] ?? false
+                          }
                           disabled={isReadOnly}
                           onChange={(e) => {
-                            const next = { ...(draft.sharedFields || {}), containerConfigJson: e.target.checked };
-                            setDraft((prev) => prev ? { ...prev, sharedFields: next } : prev);
+                            const next = {
+                              ...(draft.sharedFields || {}),
+                              containerConfigJson: e.target.checked,
+                            };
+                            setDraft((prev) =>
+                              prev ? { ...prev, sharedFields: next } : prev
+                            );
                           }}
                         />
                         {t("mcpTools.detail.share")}
@@ -523,15 +587,26 @@ export default function McpServiceDetailModal({
                     mode="multiple"
                     placeholder={t("tenantResources.knowledgeBase.groupNames")}
                     disabled={isReadOnly || isApi}
-                    value={draft.groupIds ? draft.groupIds.split(",").map(Number) : []}
-                    options={groups.map((g: { group_id: number; group_name: string }) => ({
-                      label: g.group_name,
-                      value: g.group_id,
-                    }))}
-                    notFoundContent={t("knowledgeBase.create.permission.groupPlaceholder") || t("mcpTools.detail.noGroups")}
+                    value={
+                      draft.groupIds
+                        ? draft.groupIds.split(",").map(Number)
+                        : []
+                    }
+                    options={groups.map(
+                      (g: { group_id: number; group_name: string }) => ({
+                        label: g.group_name,
+                        value: g.group_id,
+                      })
+                    )}
+                    notFoundContent={
+                      t("knowledgeBase.create.permission.groupPlaceholder") ||
+                      t("mcpTools.detail.noGroups")
+                    }
                     onChange={(values: number[]) => {
                       const next = values.join(",");
-                      setDraft((prev) => prev ? { ...prev, groupIds: next } : prev);
+                      setDraft((prev) =>
+                        prev ? { ...prev, groupIds: next } : prev
+                      );
                       form.setFieldValue("group_ids", values);
                     }}
                     className="rounded-md"
@@ -547,13 +622,34 @@ export default function McpServiceDetailModal({
                       value={draft.ingroupPermission ?? "READ_ONLY"}
                       disabled={isReadOnly || isApi}
                       onChange={(value) => {
-                        setDraft((prev) => prev ? { ...prev, ingroupPermission: value as "EDIT" | "READ_ONLY" | "PRIVATE" } : prev);
+                        setDraft((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                ingroupPermission: value as
+                                  | "EDIT"
+                                  | "READ_ONLY"
+                                  | "PRIVATE",
+                              }
+                            : prev
+                        );
                         form.setFieldValue("ingroup_permission", value);
                       }}
                       options={[
-                        { value: "READ_ONLY", label: t("knowledgeBase.ingroup.permission.READ_ONLY") },
-                        { value: "EDIT", label: t("knowledgeBase.ingroup.permission.EDIT") },
-                        { value: "PRIVATE", label: t("knowledgeBase.ingroup.permission.PRIVATE") },
+                        {
+                          value: "READ_ONLY",
+                          label: t(
+                            "knowledgeBase.ingroup.permission.READ_ONLY"
+                          ),
+                        },
+                        {
+                          value: "EDIT",
+                          label: t("knowledgeBase.ingroup.permission.EDIT"),
+                        },
+                        {
+                          value: "PRIVATE",
+                          label: t("knowledgeBase.ingroup.permission.PRIVATE"),
+                        },
                       ]}
                     />
                   </Form.Item>
@@ -561,18 +657,29 @@ export default function McpServiceDetailModal({
               </div>
             </Can>
             {isApi ? (
-              <p className="text-xs text-slate-400 -mt-3">{t("mcpTools.detail.groupPermissionUnsupported")}</p>
+              <p className="text-xs text-slate-400 -mt-3">
+                {t("mcpTools.detail.groupPermissionUnsupported")}
+              </p>
             ) : null}
 
-              <TagEditor
-                title={t("mcpTools.detail.tags")}
-                titleClassName="mb-1 block text-sm font-medium text-slate-700"
-                tags={draftTags}
-                onAddTag={(tag) => addTag(tag || "")}
-                onRemoveTag={removeTag}
-                removeAriaKey="mcpTools.detail.removeTagAria"
-                placeholderKey="mcpTools.detail.tagInputPlaceholder"
-              />
+            <Button
+              size="small"
+              className="mb-2"
+              icon={<TagsOutlined />}
+              onClick={() => setAssignOpen(true)}
+            >
+              {t("mcpTools.action.assignTags")}
+            </Button>
+
+            <TagEditor
+              title={t("mcpTools.detail.tags")}
+              titleClassName="mb-1 block text-sm font-medium text-slate-700"
+              tags={draftTags}
+              onAddTag={(tag) => addTag(tag || "")}
+              onRemoveTag={removeTag}
+              removeAriaKey="mcpTools.detail.removeTagAria"
+              placeholderKey="mcpTools.detail.tagInputPlaceholder"
+            />
           </Form>
 
           <div className="flex flex-col gap-y-3 border-t border-slate-100 bg-white px-6 py-4">
@@ -605,7 +712,9 @@ export default function McpServiceDetailModal({
                 disabled={isUnsupported || isReadOnly}
                 onClick={handleSave}
               >
-                {isReadOnly ? t("mcpTools.detail.noEditPermission") : t("mcpTools.detail.save")}
+                {isReadOnly
+                  ? t("mcpTools.detail.noEditPermission")
+                  : t("mcpTools.detail.save")}
               </Button>
             </div>
           </div>
@@ -641,6 +750,15 @@ export default function McpServiceDetailModal({
           containerId={draft.containerId}
         />
       ) : null}
+
+      <ResourceTagAssignmentModal
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        resourceType="mcp_service"
+        resourceId={String(selectedService?.mcpId ?? "")}
+        definitions={assignDefinitions ?? []}
+        canEdit={true}
+      />
 
       <PublishConfirmModal
         open={publishConfirmOpen}

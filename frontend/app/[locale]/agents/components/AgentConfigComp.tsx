@@ -8,9 +8,10 @@ import ToolManagement from "./agentConfig/ToolManagement";
 import SkillBuildModal from "./agentConfig/SkillBuildModal";
 import SelectedSkillManagement from "./agentConfig/SelectedSkillManagement";
 import SelectToolsDialog from "./agentConfig/tool/SelectToolsDialog";
-import LabelManagementModal from "./agentConfig/tool/LabelManagementModal";
 import SelectSkillsDialog from "./agentConfig/skill/SelectSkillsDialog";
-import SkillTagManagementModal from "./agentConfig/skill/SkillTagManagementModal";
+import ResourceTagAssignmentModal from "@/components/tag/ResourceTagAssignmentModal";
+import TagDefinitionManagementModal from "@/components/tag/TagDefinitionManagementModal";
+import { useTagDefinitions, useTagLibraries } from "@/hooks/useTagManagement";
 
 import { updateToolList } from "@/services/mcpService";
 import { useAgentConfigStore } from "@/stores/agentConfigStore";
@@ -51,16 +52,28 @@ export default function AgentConfigComp() {
   const [isRefreshingSkill, setIsRefreshingSkill] = useState(false);
   const [showA2ADiscovery, setShowA2ADiscovery] = useState(false);
   const [isToolSelectOpen, setIsToolSelectOpen] = useState(false);
-  const [labelModalOpen, setLabelModalOpen] = useState(false);
   const [isSkillSelectOpen, setIsSkillSelectOpen] = useState(false);
-  const [tagModalOpen, setTagModalOpen] = useState(false);
+  const [assignTagsOpen, setAssignTagsOpen] = useState(false);
+  const [assignTarget, setAssignTarget] = useState<{
+    resourceType: string;
+    ids: string[];
+  }>({ resourceType: "tool", ids: [] });
+  const [tagManagementOpen, setTagManagementOpen] = useState(false);
   const [editingSkill, setEditingSkill] = useState<MyEditableSkillItem | null>(
     null
   );
 
   // Use tool list hook for data management
   const { invalidate, availableTools } = useToolList();
-  const { invalidate: invalidateSkills } = useSkillList();
+  const { invalidate: invalidateSkills, availableSkills } = useSkillList({
+    enabled: assignTagsOpen || tagManagementOpen,
+  });
+  const { data: tagLibraries } = useTagLibraries();
+  const defaultLibrary =
+    tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
+  const { data: assignDefinitions } = useTagDefinitions(
+    defaultLibrary?.bucket_id ?? null
+  );
   const { invalidate: invalidateExternalAgents } = useExternalAgents();
 
   const handleRefreshTools = useCallback(async () => {
@@ -355,32 +368,53 @@ export default function AgentConfigComp() {
       <SelectToolsDialog
         open={isToolSelectOpen}
         onClose={() => setIsToolSelectOpen(false)}
-        onOpenManageLabels={() => setLabelModalOpen(true)}
+        onOpenManageLabels={() => {
+          setAssignTarget({
+            resourceType: "tool",
+            ids: availableTools.map((tool) => String(tool.id)),
+          });
+          setAssignTagsOpen(true);
+        }}
+        onOpenManageTags={() => setTagManagementOpen(true)}
         isCreatingMode={isCreatingMode}
         currentAgentId={currentAgentId ?? undefined}
       />
 
-      <LabelManagementModal
-        open={labelModalOpen}
-        onClose={() => setLabelModalOpen(false)}
-        availableTools={availableTools}
+      <ResourceTagAssignmentModal
+        open={assignTagsOpen}
+        onClose={() => setAssignTagsOpen(false)}
+        resourceType={assignTarget.resourceType}
+        resourceId=""
+        definitions={assignDefinitions ?? []}
+        canEdit={!isReadOnly}
+        bulkResourceIds={assignTarget.ids}
+      />
+
+      <TagDefinitionManagementModal
+        open={tagManagementOpen}
+        onClose={() => setTagManagementOpen(false)}
+        bucketId={defaultLibrary?.bucket_id ?? 0}
+        bucketName={defaultLibrary?.bucket_name ?? ""}
+        canManage={!isReadOnly}
       />
 
       <SelectSkillsDialog
         open={isSkillSelectOpen}
         onClose={() => setIsSkillSelectOpen(false)}
-        onOpenManageTags={() => setTagModalOpen(true)}
+        onOpenManageTags={() => {
+          setAssignTarget({
+            resourceType: "skill",
+            ids: availableSkills.map((skill: Skill) => String(skill.skill_id)),
+          });
+          setAssignTagsOpen(true);
+        }}
+        onOpenTagManagement={() => setTagManagementOpen(true)}
         onEditSkill={(skill) => {
           handleOpenSkillEditor(skill);
         }}
         isCreatingMode={isCreatingMode}
         currentAgentId={currentAgentId ?? undefined}
         isReadOnly={isReadOnly}
-      />
-
-      <SkillTagManagementModal
-        open={tagModalOpen}
-        onClose={() => setTagModalOpen(false)}
       />
 
       <SkillBuildModal

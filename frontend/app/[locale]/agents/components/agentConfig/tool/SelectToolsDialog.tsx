@@ -27,14 +27,24 @@ import {
 } from "./utils";
 import log from "@/lib/logger";
 
-function isToolDisabled(name: string, img: boolean, vid: boolean, emb: boolean): boolean {
+function isToolDisabled(
+  name: string,
+  img: boolean,
+  vid: boolean,
+  emb: boolean
+): boolean {
   if (TOOLS_REQUIRING_IMAGE_UNDERSTANDING.includes(name) && !img) return true;
   if (TOOLS_REQUIRING_VIDEO_UNDERSTANDING.includes(name) && !vid) return true;
   if (TOOLS_REQUIRING_EMBEDDING.includes(name) && !emb) return true;
   return false;
 }
 
-function getToolDisabledTooltipKey(name: string, img: boolean, vid: boolean, emb: boolean): string | null {
+function getToolDisabledTooltipKey(
+  name: string,
+  img: boolean,
+  vid: boolean,
+  emb: boolean
+): string | null {
   if (TOOLS_REQUIRING_IMAGE_UNDERSTANDING.includes(name) && !img) {
     return "toolPool.imageUnderstandingDisabledTooltip";
   }
@@ -56,15 +66,28 @@ function getToolDescription(tool: any): string {
 }
 
 const SOURCE_TABS: { key: string; labelKey: string; sourceValue: string }[] = [
-  { key: "local", labelKey: "toolPool.group.local", sourceValue: TOOL_SOURCE_TYPES.LOCAL },
-  { key: "mcp", labelKey: "toolPool.group.mcp", sourceValue: TOOL_SOURCE_TYPES.MCP },
-  { key: "langchain", labelKey: "toolPool.group.langchain", sourceValue: TOOL_SOURCE_TYPES.LANGCHAIN },
+  {
+    key: "local",
+    labelKey: "toolPool.group.local",
+    sourceValue: TOOL_SOURCE_TYPES.LOCAL,
+  },
+  {
+    key: "mcp",
+    labelKey: "toolPool.group.mcp",
+    sourceValue: TOOL_SOURCE_TYPES.MCP,
+  },
+  {
+    key: "langchain",
+    labelKey: "toolPool.group.langchain",
+    sourceValue: TOOL_SOURCE_TYPES.LANGCHAIN,
+  },
 ];
 
 interface SelectToolsDialogProps {
   open: boolean;
   onClose: () => void;
   onOpenManageLabels: () => void;
+  onOpenManageTags: () => void;
   isCreatingMode?: boolean;
   currentAgentId?: number;
 }
@@ -73,6 +96,7 @@ export default function SelectToolsDialog({
   open,
   onClose,
   onOpenManageLabels,
+  onOpenManageTags,
   isCreatingMode,
   currentAgentId,
 }: SelectToolsDialogProps) {
@@ -82,21 +106,35 @@ export default function SelectToolsDialog({
   const { availableTools } = useToolList({ enabled: open });
   const { user } = useAuthorizationContext();
   const tenantId = user?.tenantId || null;
-  const { serverList: rawServers } = useMcpServerList({ enabled: open, tenantId });
+  const { serverList: rawServers } = useMcpServerList({
+    enabled: open,
+    tenantId,
+  });
   const allMcpServerNames = useMemo(
     () => new Set(rawServers.map((s) => s.service_name)),
-    [rawServers],
+    [rawServers]
   );
   const visibleMcpNames = useMemo(
-    () => new Set(
-      rawServers
-        .filter((s) => !s.permission || s.permission === "EDIT" || s.permission === "READ_ONLY" || s.group_ids)
-        .map((s) => s.service_name),
-    ),
-    [rawServers],
+    () =>
+      new Set(
+        rawServers
+          .filter(
+            (s) =>
+              !s.permission ||
+              s.permission === "EDIT" ||
+              s.permission === "READ_ONLY" ||
+              s.group_ids
+          )
+          .map((s) => s.service_name)
+      ),
+    [rawServers]
   );
   const { prefetchKnowledgeBases } = usePrefetchKnowledgeBases();
-  const { isImageUnderstandingAvailable, isVideoUnderstandingAvailable, isEmbeddingAvailable } = useConfig();
+  const {
+    isImageUnderstandingAvailable,
+    isVideoUnderstandingAvailable,
+    isEmbeddingAvailable,
+  } = useConfig();
 
   const selectedTools = useAgentConfigStore((state) => state.editedAgent.tools);
   const updateTools = useAgentConfigStore((state) => state.updateTools);
@@ -131,9 +169,13 @@ export default function SelectToolsDialog({
         (t: any) => t.source === tab.sourceValue
       );
       // For MCP tools: show API-added (not in server list) or from visible servers
-      const filteredTools = tab.key === "mcp"
-        ? sourceTools.filter((t: any) => !allMcpServerNames.has(t.usage) || visibleMcpNames.has(t.usage))
-        : sourceTools;
+      const filteredTools =
+        tab.key === "mcp"
+          ? sourceTools.filter(
+              (t: any) =>
+                !allMcpServerNames.has(t.usage) || visibleMcpNames.has(t.usage)
+            )
+          : sourceTools;
       const catMap = new Map<string, any[]>();
       for (const tool of filteredTools) {
         // MCP tools are grouped by server name (usage); local/langchain by category
@@ -180,7 +222,8 @@ export default function SelectToolsDialog({
       // Label filter (OR — tool must have at least one selected label)
       if (hasLabels) {
         const toolLabels = getToolLabels(tool);
-        if (!toolLabels.some((l: string) => activeLabels.includes(l))) return false;
+        if (!toolLabels.some((l: string) => activeLabels.includes(l)))
+          return false;
       }
       return true;
     };
@@ -190,11 +233,17 @@ export default function SelectToolsDialog({
       .filter((g) => g.tools.length > 0);
   }, [sourceGroups, activeTab, search, activeLabels]);
 
-  const visibleCategories = useMemo(() => currentGroups.map((g) => g.category), [currentGroups]);
+  const visibleCategories = useMemo(
+    () => currentGroups.map((g) => g.category),
+    [currentGroups]
+  );
 
   // Auto-select first visible category
   useEffect(() => {
-    if (visibleCategories.length > 0 && (!activeCategory || !visibleCategories.includes(activeCategory))) {
+    if (
+      visibleCategories.length > 0 &&
+      (!activeCategory || !visibleCategories.includes(activeCategory))
+    ) {
       setActiveCategory(visibleCategories[0]);
     }
   }, [visibleCategories, activeCategory]);
@@ -215,14 +264,21 @@ export default function SelectToolsDialog({
       // If tool already has stored params with non-empty values, the user's
       // unsaved modifications are already reflected in those params — skip the
       // API call to avoid overwriting them with stale server data.
-      const hasStoredParams = params.some((p: ToolParam) => p.value !== undefined && p.value !== null && p.value !== "");
+      const hasStoredParams = params.some(
+        (p: ToolParam) =>
+          p.value !== undefined && p.value !== null && p.value !== ""
+      );
       if (!forceFetch && hasStoredParams) {
         return params;
       }
       if (!currentAgentId) return params;
       try {
-        const { searchToolConfig } = await import("@/services/agentConfigService");
-        const instance = await searchToolConfig(parseInt(tool.id), currentAgentId);
+        const { searchToolConfig } =
+          await import("@/services/agentConfigService");
+        const instance = await searchToolConfig(
+          parseInt(tool.id),
+          currentAgentId
+        );
         if (instance.success && instance.data) {
           return params.map((p: ToolParam) => ({
             ...p,
@@ -298,7 +354,9 @@ export default function SelectToolsDialog({
       if (kbType) prefetchKnowledgeBases(kbType);
 
       const currentSelected = useAgentConfigStore.getState().editedAgent.tools;
-      const configuredTool = currentSelected.find((t) => parseInt(t.id) === numericId);
+      const configuredTool = currentSelected.find(
+        (t) => parseInt(t.id) === numericId
+      );
       const toolToUse = configuredTool
         ? { ...tool, ...configuredTool, initParams: configuredTool.initParams }
         : tool;
@@ -324,7 +382,9 @@ export default function SelectToolsDialog({
       );
 
       if (isCurrentlySelected) {
-        updateTools(currentSelected.filter((t) => parseInt(t.id) !== numericId));
+        updateTools(
+          currentSelected.filter((t) => parseInt(t.id) !== numericId)
+        );
         return;
       }
 
@@ -346,7 +406,9 @@ export default function SelectToolsDialog({
       if (dup) {
         confirm({
           title: t("toolPool.duplicateToolName.title"),
-          content: t("toolPool.duplicateToolName.content", { toolName: tool.name }),
+          content: t("toolPool.duplicateToolName.content", {
+            toolName: tool.name,
+          }),
           okText: t("toolPool.duplicateToolName.confirm"),
           cancelText: t("toolPool.duplicateToolName.cancel"),
           danger: true,
@@ -356,7 +418,14 @@ export default function SelectToolsDialog({
         await doAdd();
       }
     },
-    [prefetchKnowledgeBases, mergeInstanceParams, hasMissingRequired, confirm, updateTools, t]
+    [
+      prefetchKnowledgeBases,
+      mergeInstanceParams,
+      hasMissingRequired,
+      confirm,
+      updateTools,
+      t,
+    ]
   );
 
   const selectAllVisibleTools = useCallback(async () => {
@@ -380,7 +449,9 @@ export default function SelectToolsDialog({
         }))
       );
       const latestSelected = useAgentConfigStore.getState().editedAgent.tools;
-      const latestIds = new Set(latestSelected.map((tool) => parseInt(tool.id)));
+      const latestIds = new Set(
+        latestSelected.map((tool) => parseInt(tool.id))
+      );
       const names = new Set(latestSelected.map((tool) => tool.name));
       const additions = toolsWithParams.filter((tool) => {
         if (
@@ -420,12 +491,12 @@ export default function SelectToolsDialog({
     );
   }, [activeToolGroup, updateTools]);
 
-  const tabItems: TabsProps["items"] = SOURCE_TABS
-    .filter((tab) => (sourceGroups[tab.key] || []).length > 0)
-    .map((tab) => ({
-      key: tab.key,
-      label: t(tab.labelKey),
-    }));
+  const tabItems: TabsProps["items"] = SOURCE_TABS.filter(
+    (tab) => (sourceGroups[tab.key] || []).length > 0
+  ).map((tab) => ({
+    key: tab.key,
+    label: t(tab.labelKey),
+  }));
 
   // Auto-switch to first available tab when active tab becomes hidden
   useEffect(() => {
@@ -455,7 +526,16 @@ export default function SelectToolsDialog({
               onClick={onOpenManageLabels}
               className="!text-purple-500 hover:!text-purple-600 hover:!bg-purple-50 h-6 text-xs"
             >
-              {t("toolPool.manageLabels")}
+              {t("toolPool.bulkAssignTags")}
+            </Button>
+            <Button
+              type="text"
+              size="small"
+              icon={<Tag size={13} />}
+              onClick={onOpenManageTags}
+              className="!text-purple-500 hover:!text-purple-600 hover:!bg-purple-50 h-6 text-xs"
+            >
+              {t("toolPool.tagManagement")}
             </Button>
           </div>
         }
@@ -489,13 +569,21 @@ export default function SelectToolsDialog({
             options={allLabels.map((l: string) => {
               // Count tools matching this label in the current source tab
               const count = (sourceGroups[activeTab] || []).reduce(
-                (sum, g) => sum + g.tools.filter((t: any) => getToolLabels(t).includes(l)).length, 0
+                (sum, g) =>
+                  sum +
+                  g.tools.filter((t: any) => getToolLabels(t).includes(l))
+                    .length,
+                0
               );
               return { label: `${l} (${count})`, value: l };
             })}
             allowClear
             maxTagCount={1}
-            notFoundContent={allLabels.length === 0 ? t("toolPool.noLabelsAssigned") : undefined}
+            notFoundContent={
+              allLabels.length === 0
+                ? t("toolPool.noLabelsAssigned")
+                : undefined
+            }
           />
           <Button
             loading={isSelectingAll}
@@ -538,13 +626,16 @@ export default function SelectToolsDialog({
                 >
                   {t(g.category)}
                   <span className="ml-1 text-xs text-gray-400">
-                    ({selCount > 0 ? `${selCount}/` : ""}{count})
+                    ({selCount > 0 ? `${selCount}/` : ""}
+                    {count})
                   </span>
                 </button>
               );
             })}
             {currentGroups.length === 0 && (
-              <div className="py-2 pl-3 text-sm text-gray-400">{t("toolPool.noTools")}</div>
+              <div className="py-2 pl-3 text-sm text-gray-400">
+                {t("toolPool.noTools")}
+              </div>
             )}
           </nav>
 
@@ -584,9 +675,14 @@ export default function SelectToolsDialog({
                               ? "cursor-not-allowed opacity-50"
                               : "cursor-pointer hover:bg-gray-50"
                           }`}
-                          onClick={disabled ? undefined : () => handleToolToggle(tool)}
+                          onClick={
+                            disabled ? undefined : () => handleToolToggle(tool)
+                          }
                           onKeyDown={(e) => {
-                            if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+                            if (
+                              !disabled &&
+                              (e.key === "Enter" || e.key === " ")
+                            ) {
                               e.preventDefault();
                               handleToolToggle(tool);
                             }
@@ -632,7 +728,10 @@ export default function SelectToolsDialog({
                       return (
                         <li key={tool.id}>
                           {disabledTooltipKey ? (
-                            <Tooltip title={t(disabledTooltipKey)} mouseEnterDelay={0.2}>
+                            <Tooltip
+                              title={t(disabledTooltipKey)}
+                              mouseEnterDelay={0.2}
+                            >
                               {row}
                             </Tooltip>
                           ) : (
@@ -644,7 +743,8 @@ export default function SelectToolsDialog({
                   </ul>
                 </div>
               ))}
-            {currentGroups.filter((g) => g.category === activeCategory).length === 0 &&
+            {currentGroups.filter((g) => g.category === activeCategory)
+              .length === 0 &&
               search.trim() !== "" && (
                 <div className="flex items-center justify-center py-8 text-sm text-gray-400">
                   {t("toolPool.noSearchResults")}

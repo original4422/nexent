@@ -1,11 +1,22 @@
 "use client";
 
-import React from "react";
-import { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Button, Col, Flex, Tooltip, Divider, Table, theme, App, Modal, Spin, message } from "antd";
+import {
+  Button,
+  Col,
+  Flex,
+  Tooltip,
+  Divider,
+  Table,
+  theme,
+  App,
+  Modal,
+  Spin,
+  message,
+} from "antd";
 import { ExclamationCircleOutlined } from "@ant-design/icons";
-import { Copy, FileOutput, Network, Trash2, Globe } from "lucide-react";
+import { Copy, FileOutput, Network, Tag, Trash2, Globe } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 
 import { Agent } from "@/types/agentConfig";
@@ -19,6 +30,13 @@ import {
   updateToolConfig,
 } from "@/services/agentConfigService";
 import { useAgentConfigStore } from "@/stores/agentConfigStore";
+import ResourceTagAssignmentModal from "@/components/tag/ResourceTagAssignmentModal";
+import ResourceTagChips from "@/components/tag/ResourceTagChips";
+import TagFilterControls from "@/components/tag/TagFilterControls";
+import { Popover } from "antd";
+import { tagManagementApi } from "@/services/tagManagementService";
+import type { TagResourcePredicate } from "@/types/tagManagement";
+import { useTagDefinitions, useTagLibraries } from "@/hooks/useTagManagement";
 import { useSaveGuard } from "@/hooks/agent/useSaveGuard";
 import { clearAgentNewMark } from "@/services/agentConfigService";
 import { a2aClientService } from "@/services/a2aService";
@@ -30,9 +48,7 @@ interface AgentListProps {
   agentList: Agent[];
 }
 
-export default function AgentList({
-  agentList,
-}: AgentListProps) {
+export default function AgentList({ agentList }: AgentListProps) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const { message } = App.useApp();
@@ -47,12 +63,27 @@ export default function AgentList({
 
   // A2A settings modal state
   const [showA2ASettings, setShowA2ASettings] = useState(false);
-  const [selectedAgentForA2A, setSelectedAgentForA2A] = useState<Agent | null>(null);
+  const [assignTarget, setAssignTarget] = useState<{
+    agentId: string;
+    canEdit: boolean;
+  } | null>(null);
+  const [tagPredicates, setTagPredicates] = useState<TagResourcePredicate[]>([]);
+  const [matchedTagIds, setMatchedTagIds] = useState<Set<string> | null>(null);
+  const { data: tagLibraries } = useTagLibraries();
+  const defaultLibraryBucket =
+    tagLibraries?.find((lib) => lib.bucket_key === "default_resource")
+      ?.bucket_id ?? null;
+  const { data: assignDefinitions } = useTagDefinitions(defaultLibraryBucket);
+  const [selectedAgentForA2A, setSelectedAgentForA2A] = useState<Agent | null>(
+    null
+  );
 
   // A2A settings modal state
   const currentAgentId = useAgentConfigStore((state) => state.currentAgentId);
   const setCurrentAgent = useAgentConfigStore((state) => state.setCurrentAgent);
-  const hasUnsavedChanges = useAgentConfigStore((state) => state.hasUnsavedChanges);
+  const hasUnsavedChanges = useAgentConfigStore(
+    (state) => state.hasUnsavedChanges
+  );
 
   // Mutations
   const updateAgentMutation = useMutation({
@@ -63,13 +94,14 @@ export default function AgentList({
     mutationFn: (agentId: number) => deleteAgent(agentId),
   });
 
-    // Unsaved changes guard
+  // Unsaved changes guard
   const checkUnsavedChanges = useSaveGuard();
 
   // Fetch A2A Server Settings when modal opens
   const { data: a2aSettingsData, isLoading: isLoadingA2ASettings } = useQuery({
     queryKey: ["a2aServerSettings", selectedAgentForA2A?.id],
-    queryFn: () => a2aClientService.getServerSettings(Number(selectedAgentForA2A!.id)),
+    queryFn: () =>
+      a2aClientService.getServerSettings(Number(selectedAgentForA2A!.id)),
     enabled: showA2ASettings && !!selectedAgentForA2A,
   });
 
@@ -81,7 +113,9 @@ export default function AgentList({
     const interfaces = data.supported_interfaces;
     const endpointId = data.endpoint_id;
     const restEndpoints = interfaces.filter(
-      (iface: any) => iface.protocolBinding.toLowerCase() === "http+json" || iface.protocolBinding.toLowerCase() === "httprest"
+      (iface: any) =>
+        iface.protocolBinding.toLowerCase() === "http+json" ||
+        iface.protocolBinding.toLowerCase() === "httprest"
     );
     const jsonrpcEndpoints = interfaces.filter(
       (iface: any) =>
@@ -152,7 +186,10 @@ export default function AgentList({
     }
 
     // Only guard when leaving an existing agent or exiting create mode
-    if (currentAgentId !== null || useAgentConfigStore.getState().isCreatingMode) {
+    if (
+      currentAgentId !== null ||
+      useAgentConfigStore.getState().isCreatingMode
+    ) {
       const canSwitch = await checkUnsavedChanges.saveWithModal();
       if (!canSwitch) {
         return;
@@ -165,7 +202,9 @@ export default function AgentList({
       if (result.success && result.data) {
         setCurrentAgent(result.data);
       } else {
-        message.error(result.message || t("agentConfig.agents.detailsLoadFailed"));
+        message.error(
+          result.message || t("agentConfig.agents.detailsLoadFailed")
+        );
       }
     } catch (error) {
       log.error("Failed to load agent detail:", error);
@@ -178,7 +217,9 @@ export default function AgentList({
     try {
       const result = await exportAgent(Number(agent.id));
       if (!result.success) {
-        message.error(result.message || t("businessLogic.config.error.agentExportFailed"));
+        message.error(
+          result.message || t("businessLogic.config.error.agentExportFailed")
+        );
         return;
       }
 
@@ -243,7 +284,8 @@ export default function AgentList({
       // using the agent's first available legacy model_id (single-select) when
       // model_ids is empty in the response.
       const modelIdsForCopy = (() => {
-        if (detail.model_ids && detail.model_ids.length > 0) return detail.model_ids;
+        if (detail.model_ids && detail.model_ids.length > 0)
+          return detail.model_ids;
         const legacySingleId = (detail as { model_id?: number }).model_id;
         if (legacySingleId) return [legacySingleId];
         return undefined;
@@ -265,7 +307,8 @@ export default function AgentList({
         duty_prompt: detail.duty_prompt,
         constraint_prompt: detail.constraint_prompt,
         few_shots_prompt: detail.few_shots_prompt,
-        business_logic_model_name: detail.business_logic_model_name ?? undefined,
+        business_logic_model_name:
+          detail.business_logic_model_name ?? undefined,
         business_logic_model_id: detail.business_logic_model_id ?? undefined,
         prompt_template_id: detail.prompt_template_id ?? 0,
         prompt_template_name: detail.prompt_template_name ?? "system_default",
@@ -372,16 +415,80 @@ export default function AgentList({
     });
   };
 
+  useEffect(() => {
+    if (tagPredicates.length === 0) {
+      setMatchedTagIds(null);
+      return;
+    }
+    const ids = agentList.map((agent) => agent.id).filter(Boolean);
+    if (ids.length === 0) {
+      setMatchedTagIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    tagManagementApi
+      .filterResourceIds("agent", ids, tagPredicates)
+      .then((result) => {
+        if (cancelled) return;
+        setMatchedTagIds(new Set(result.matched_resource_ids ?? []));
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setMatchedTagIds(new Set());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tagPredicates, agentList]);
+
+  const visibleAgentList = useMemo(() => {
+    if (matchedTagIds === null) return agentList;
+    return agentList.filter((agent) => matchedTagIds.has(agent.id));
+  }, [agentList, matchedTagIds]);
+
   return (
     <Col xs={24} className="h-full">
       <Flex vertical className="h-full overflow-hidden">
-        <div className="text-sm font-medium text-gray-600 mb-1 px-1">
-          {t("subAgentPool.section.agentList")} ({agentList.length})
+        <div className="flex items-center justify-between mb-1 px-1">
+          <div className="text-sm font-medium text-gray-600">
+            {t("subAgentPool.section.agentList")} ({agentList.length})
+          </div>
+          <Popover
+            trigger="click"
+            placement="bottomRight"
+            content={
+              <div className="w-72">
+                <TagFilterControls
+                  definitions={assignDefinitions ?? []}
+                  value={tagPredicates}
+                  onChange={setTagPredicates}
+                />
+                {tagPredicates.length > 0 ? (
+                  <button
+                    type="button"
+                    className="mt-2 text-xs text-blue-600 hover:underline"
+                    onClick={() => setTagPredicates([])}
+                  >
+                    {t("subAgentPool.tagFilter.clear")}
+                  </button>
+                ) : null}
+              </div>
+            }
+          >
+            <Button
+              type={tagPredicates.length > 0 ? "primary" : "default"}
+              size="small"
+              icon={<Tag className="w-3.5 h-3.5" aria-hidden />}
+              aria-label={t("subAgentPool.tagFilter.button")}
+            >
+              {t("subAgentPool.tagFilter.button")}
+            </Button>
+          </Popover>
         </div>
         <Divider style={{ margin: "6px 0 0 0" }} />
         <div className="flex-1 min-h-0 overflow-y-auto">
           <Table
-            dataSource={agentList}
+            dataSource={visibleAgentList}
             size="middle"
             rowKey={(agent) => String(agent.id)}
             pagination={false}
@@ -394,10 +501,7 @@ export default function AgentList({
                 agent.is_available === false
                   ? "opacity-60 cursor-not-allowed"
                   : "hover:bg-gray-50 cursor-pointer"
-              } ${
-                isSelected ? "bg-blue-50 selected-row pl-3"
-                  : ""
-              }`;
+              } ${isSelected ? "bg-blue-50 selected-row pl-3" : ""}`;
             }}
             onRow={(agent: any) => ({
               onClick: (e: any) => {
@@ -440,17 +544,27 @@ export default function AgentList({
                             <Tooltip
                               title={(() => {
                                 const reasons = agent.unavailable_reasons || [];
-                                const labels = getUnavailableReasonLabels(reasons, t);
-                                return labels.join(", ") || t('subAgentPool.tooltip.unavailableAgent');
+                                const labels = getUnavailableReasonLabels(
+                                  reasons,
+                                  t
+                                );
+                                return (
+                                  labels.join(", ") ||
+                                  t("subAgentPool.tooltip.unavailableAgent")
+                                );
                               })()}
                             >
                               <ExclamationCircleOutlined className="text-amber-500 text-sm flex-shrink-0 cursor-pointer" />
                             </Tooltip>
                           )}
                           {isNew && (
-                            <Tooltip title={t("space.new", "New imported agent")}>
+                            <Tooltip
+                              title={t("space.new", "New imported agent")}
+                            >
                               <span className="inline-flex items-center px-1 h-5 bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-300 rounded-full text-[11px] font-medium border border-amber-200 flex-shrink-0 leading-none">
-                                <span className="px-0.5">{t("space.new", "NEW")}</span>
+                                <span className="px-0.5">
+                                  {t("space.new", "NEW")}
+                                </span>
                               </span>
                             </Tooltip>
                           )}
@@ -480,6 +594,11 @@ export default function AgentList({
                       >
                         {agent.description}
                       </div>
+                      <ResourceTagChips
+                        resourceType="agent"
+                        resourceId={agent.id}
+                        max={3}
+                      />
                     </Flex>
                   );
                 },
@@ -496,28 +615,28 @@ export default function AgentList({
                       justifyContent: "flex-end",
                     }}
                   >
-                        {agent.is_a2a_server && (
-                          <Tooltip title={t("a2a.agent.viewA2ASettings")}>
-                            <span>
-                              <Button
-                                type="text"
-                                size="small"
-                                icon={
-                                  <Globe
-                                    className="w-4 h-4"
-                                    style={{ color: token.colorPrimary }}
-                                  />
-                                }
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleViewA2AAgentSettings(agent);
-                                }}
-                                className="agent-action-button agent-action-button-blue"
+                    {agent.is_a2a_server && (
+                      <Tooltip title={t("a2a.agent.viewA2ASettings")}>
+                        <span>
+                          <Button
+                            type="text"
+                            size="small"
+                            icon={
+                              <Globe
+                                className="w-4 h-4"
+                                style={{ color: token.colorPrimary }}
                               />
-                            </span>
-                          </Tooltip>
-                        )}
+                            }
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleViewA2AAgentSettings(agent);
+                            }}
+                            className="agent-action-button agent-action-button-blue"
+                          />
+                        </span>
+                      </Tooltip>
+                    )}
                     <Tooltip title={t("agent.contextMenu.copy")}>
                       <span>
                         <Button
@@ -616,6 +735,31 @@ export default function AgentList({
                         />
                       </span>
                     </Tooltip>
+
+                    <Tooltip title={t("agent.action.assignTags")}>
+                      <span>
+                        <Button
+                          type="text"
+                          size="small"
+                          icon={
+                            <Tag
+                              className="w-4 h-4"
+                              style={{ color: token.colorPrimary }}
+                            />
+                          }
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setAssignTarget({
+                              agentId: agent.id,
+                              canEdit: agent.permission !== "READ_ONLY",
+                            });
+                          }}
+                          disabled={agent.is_available === false}
+                          className="agent-action-button agent-action-button-blue"
+                        />
+                      </span>
+                    </Tooltip>
                   </div>
                 ),
               },
@@ -656,16 +800,32 @@ export default function AgentList({
         ) : selectedAgentForA2A && constructedA2AAgentCard ? (
           <A2AServerSettingsPanel
             agentId={Number(selectedAgentForA2A.id)}
-            agentName={selectedAgentForA2A.display_name || selectedAgentForA2A.name}
+            agentName={
+              selectedAgentForA2A.display_name || selectedAgentForA2A.name
+            }
             endpointId={constructedA2AAgentCard.endpoint_id}
             a2aAgentCard={constructedA2AAgentCard}
           />
         ) : (
-          <div style={{ textAlign: "center", padding: "40px 0", color: "#999" }}>
-            {t("a2a.service.getServerSettingsFailed", "Failed to load A2A settings")}
+          <div
+            style={{ textAlign: "center", padding: "40px 0", color: "#999" }}
+          >
+            {t(
+              "a2a.service.getServerSettingsFailed",
+              "Failed to load A2A settings"
+            )}
           </div>
         )}
       </Modal>
+
+      <ResourceTagAssignmentModal
+        open={assignTarget !== null}
+        onClose={() => setAssignTarget(null)}
+        resourceType="agent"
+        resourceId={assignTarget?.agentId ?? ""}
+        definitions={assignDefinitions ?? []}
+        canEdit={assignTarget?.canEdit ?? false}
+      />
     </Col>
   );
 }

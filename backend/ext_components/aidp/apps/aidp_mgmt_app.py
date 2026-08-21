@@ -56,6 +56,20 @@ aidp_mgmt_router = APIRouter(prefix="/aidp-mgmt")
 logger = logging.getLogger("aidp_mgmt_app")
 
 
+def _cleanup_document_assignments_for_deleted_knowledge_base(
+    tenant_id: str,
+    knowledge_base_id: str,
+    user_id: str,
+) -> None:
+    """Keep document assignment usage in sync after AIDP confirms knowledge-base deletion."""
+
+    from services.tag_management_service import TagManagementService
+
+    TagManagementService.cleanup_document_assignments_for_knowledge_base(
+        tenant_id, "aidp", knowledge_base_id, user_id
+    )
+
+
 # ---------------------------------------------------------------------------
 # Request Models
 # ---------------------------------------------------------------------------
@@ -465,6 +479,7 @@ async def delete_knowledge_base(
         perms.soft_delete_permission(
             kb_id=kds_id, tenant_id=tenant_id, updated_by=user_id,
         )
+        _cleanup_document_assignments_for_deleted_knowledge_base(tenant_id, kds_id, user_id)
     return JSONResponse(status_code=HTTPStatus.OK, content={"success": success})
 
 

@@ -2,9 +2,11 @@
 
 import { useTranslation } from "react-i18next";
 import { App, Row, Col, Flex, Tooltip, Badge, Divider } from "antd";
-import { FileInput, Plus, X } from "lucide-react";
+import { FileInput, Plus, Tag, X } from "lucide-react";
 
 import AgentList from "./agentManage/AgentList";
+import TagDefinitionManagementModal from "@/components/tag/TagDefinitionManagementModal";
+import { useTagLibraries } from "@/hooks/useTagManagement";
 
 import { useAgentConfigStore } from "@/stores/agentConfigStore";
 import { useAgentList } from "@/hooks/agent/useAgentList";
@@ -17,7 +19,6 @@ import {
 } from "@/lib/agentImportUtils";
 import AgentImportWizard from "@/components/agent/AgentImportWizard";
 
-
 export default function AgentManageComp() {
   const { t } = useTranslation("common");
   const { message } = App.useApp();
@@ -27,11 +28,16 @@ export default function AgentManageComp() {
   const isCreatingMode = useAgentConfigStore((state) => state.isCreatingMode);
   const enterCreateMode = useAgentConfigStore((state) => state.enterCreateMode);
   const reset = useAgentConfigStore((state) => state.reset);
+  const isReadOnly = useAgentConfigStore((state) => state.isReadOnly());
 
   // Import wizard state
   const [importWizardVisible, setImportWizardVisible] = useState(false);
   const [importWizardData, setImportWizardData] =
     useState<ImportAgentData | null>(null);
+  const [tagManagementOpen, setTagManagementOpen] = useState(false);
+  const { data: tagLibraries } = useTagLibraries();
+  const defaultLibrary =
+    tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
 
   // Always resolve tenant from auth on the agent dev page (matches published_list; avoids stale/wrong tenant_id query params)
   const { agents: agentList, isLoading: loading, refetch } = useAgentList("");
@@ -155,6 +161,36 @@ export default function AgentManageComp() {
               </div>
             </Tooltip>
           </Col>
+
+          <Col xs={24} sm={12}>
+            <Tooltip title={t("subAgentPool.description.tagManagement")}>
+              <div
+                className="rounded-md p-3 cursor-pointer transition-all duration-200 bg-white hover:bg-purple-50 hover:shadow-sm"
+                onClick={() => setTagManagementOpen(true)}
+              >
+                <Flex align="center" gap={12} className="text-purple-600">
+                  <Flex
+                    align="center"
+                    justify="center"
+                    className="w-8 h-8 rounded-full bg-purple-100 flex-shrink-0"
+                  >
+                    <Tag
+                      className="w-4 h-4 text-purple-600"
+                      aria-hidden="true"
+                    />
+                  </Flex>
+                  <Flex vertical style={{ flex: 1 }}>
+                    <div className="font-medium text-sm">
+                      {t("subAgentPool.button.tagManagement")}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      {t("subAgentPool.description.tagManagement")}
+                    </div>
+                  </Flex>
+                </Flex>
+              </div>
+            </Tooltip>
+          </Col>
         </Row>
 
         <div className="flex-1 min-h-0">
@@ -175,6 +211,14 @@ export default function AgentManageComp() {
           setImportWizardData(null);
           refetch(); // Refresh the agent list
         }}
+      />
+
+      <TagDefinitionManagementModal
+        open={tagManagementOpen}
+        onClose={() => setTagManagementOpen(false)}
+        bucketId={defaultLibrary?.bucket_id ?? 0}
+        bucketName={defaultLibrary?.bucket_name ?? ""}
+        canManage={!isReadOnly}
       />
     </>
   );
