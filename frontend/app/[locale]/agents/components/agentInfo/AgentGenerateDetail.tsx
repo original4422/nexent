@@ -18,7 +18,7 @@ import {
   Tooltip,
 } from "antd";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Zap, Maximize2, Settings2, Sparkles, TriangleAlert } from "lucide-react";
+import { Zap, Maximize2, Settings2, Sparkles, Tag, TriangleAlert } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 
 import {
@@ -50,6 +50,9 @@ import PromptOptimizeModal from "./PromptOptimizeModal";
 import GuardrailConfigContent from "./GuardrailConfigContent";
 import type { GuardrailConfigContentRef } from "./GuardrailConfigContent";
 import { isAgentPromptsHidden } from "@/lib/agentPromptVisibility";
+import ResourceTagAssignmentModal from "@/components/tag/ResourceTagAssignmentModal";
+import TagDefinitionManagementModal from "@/components/tag/TagDefinitionManagementModal";
+import { useTagDefinitions, useTagLibraries } from "@/hooks/useTagManagement";
 
 const { TextArea } = Input;
 
@@ -123,6 +126,14 @@ export default function AgentGenerateDetail({}) {
 
   // Agent list for name uniqueness validation (auth-scoped, same as agent dev sidebar)
   const { agents: agentList } = useAgentList("");
+  const { data: tagLibraries } = useTagLibraries();
+  const defaultTagLibrary =
+    tagLibraries?.find((library) => library.bucket_key === "default_resource") ??
+    null;
+  const {
+    data: tagDefinitions,
+    refresh: refreshTagDefinitions,
+  } = useTagDefinitions(defaultTagLibrary?.bucket_id ?? null);
 
   // State management
   const [activeTab, setActiveTab] = useState<string>("agent-info");
@@ -144,6 +155,8 @@ export default function AgentGenerateDetail({}) {
   const [optimizeModalOpen, setOptimizeModalOpen] = useState(false);
   const [optimizeModalType, setOptimizeModalType] = useState<'duty' | 'constraint' | 'few-shots' | null>(null);
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false);
+  const [assignTagsOpen, setAssignTagsOpen] = useState(false);
+  const [tagManagementOpen, setTagManagementOpen] = useState(false);
   const [advancedSettingsTab, setAdvancedSettingsTab] = useState<"basic" | "guardrail">("basic");
   const [guardrailContentKey, setGuardrailContentKey] = useState(0);
   const guardrailContentRef = useRef<GuardrailConfigContentRef>(null);
@@ -961,13 +974,24 @@ export default function AgentGenerateDetail({}) {
             <h4 className="text-md font-medium text-gray-700 mb-0">
               {t("agent.detailContent.title")}
             </h4>
-            <Button
-              icon={<Settings2 size={16} />}
-              onClick={handleOpenAdvancedSettings}
-              disabled={!editable || isGenerating}
-            >
-              {t("agent.advancedSettings.button")}
-            </Button>
+            <Flex gap={8}>
+              {currentAgentId !== null && !isCreatingMode ? (
+                <Button
+                  icon={<Tag size={16} />}
+                  onClick={() => setAssignTagsOpen(true)}
+                  disabled={!editable || isGenerating}
+                >
+                  {t("agent.action.assignTags")}
+                </Button>
+              ) : null}
+              <Button
+                icon={<Settings2 size={16} />}
+                onClick={handleOpenAdvancedSettings}
+                disabled={!editable || isGenerating}
+              >
+                {t("agent.advancedSettings.button")}
+              </Button>
+            </Flex>
           </Flex>
         </Col>
       </Row>
@@ -1409,6 +1433,29 @@ export default function AgentGenerateDetail({}) {
           </TabsContent>
         </Tabs>
       </Modal>
+
+      <ResourceTagAssignmentModal
+        open={assignTagsOpen}
+        onClose={() => setAssignTagsOpen(false)}
+        resourceType="agent"
+        resourceId={String(currentAgentId ?? "")}
+        definitions={tagDefinitions ?? []}
+        canEdit={editable && !isGenerating}
+        onManageDefinitions={() => {
+          setTagManagementOpen(true);
+        }}
+      />
+
+      <TagDefinitionManagementModal
+        open={tagManagementOpen}
+        onClose={() => {
+          setTagManagementOpen(false);
+          void refreshTagDefinitions();
+        }}
+        bucketId={defaultTagLibrary?.bucket_id ?? 0}
+        bucketName={defaultTagLibrary?.bucket_name ?? ""}
+        canManage={editable}
+      />
 
       {/* Expand Edit Modal */}
       <ExpandEditModal

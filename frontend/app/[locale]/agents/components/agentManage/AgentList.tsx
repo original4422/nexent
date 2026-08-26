@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Button,
@@ -46,9 +46,15 @@ import { getUnavailableReasonLabels } from "@/lib/agentLabelMapper";
 
 interface AgentListProps {
   agentList: Agent[];
+  onManageTagDefinitions?: () => void;
+  tagDefinitionsRefreshKey?: number;
 }
 
-export default function AgentList({ agentList }: AgentListProps) {
+export default function AgentList({
+  agentList,
+  onManageTagDefinitions,
+  tagDefinitionsRefreshKey,
+}: AgentListProps) {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const { message } = App.useApp();
@@ -73,7 +79,21 @@ export default function AgentList({ agentList }: AgentListProps) {
   const defaultLibraryBucket =
     tagLibraries?.find((lib) => lib.bucket_key === "default_resource")
       ?.bucket_id ?? null;
-  const { data: assignDefinitions } = useTagDefinitions(defaultLibraryBucket);
+  const {
+    data: assignDefinitions,
+    refresh: refreshAssignDefinitions,
+  } = useTagDefinitions(defaultLibraryBucket);
+  const previousTagDefinitionsRefreshKey = useRef(tagDefinitionsRefreshKey);
+  useEffect(() => {
+    if (
+      tagDefinitionsRefreshKey === undefined ||
+      tagDefinitionsRefreshKey === previousTagDefinitionsRefreshKey.current
+    ) {
+      return;
+    }
+    previousTagDefinitionsRefreshKey.current = tagDefinitionsRefreshKey;
+    void refreshAssignDefinitions();
+  }, [refreshAssignDefinitions, tagDefinitionsRefreshKey]);
   const [selectedAgentForA2A, setSelectedAgentForA2A] = useState<Agent | null>(
     null
   );
@@ -825,6 +845,9 @@ export default function AgentList({ agentList }: AgentListProps) {
         resourceId={assignTarget?.agentId ?? ""}
         definitions={assignDefinitions ?? []}
         canEdit={assignTarget?.canEdit ?? false}
+        onManageDefinitions={() => {
+          onManageTagDefinitions?.();
+        }}
       />
     </Col>
   );

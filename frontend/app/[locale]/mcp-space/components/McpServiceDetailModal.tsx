@@ -26,6 +26,8 @@ import McpContainerLogsModal from "@/components/mcp/McpContainerLogsModal";
 import McpToolListModal from "@/components/mcp/McpToolListModal";
 import ContainerPortField from "./shared/ContainerPortField";
 import ResourceTagAssignmentModal from "@/components/tag/ResourceTagAssignmentModal";
+import ResourceTagChips from "@/components/tag/ResourceTagChips";
+import TagDefinitionManagementModal from "@/components/tag/TagDefinitionManagementModal";
 import { useTagDefinitions, useTagLibraries } from "@/hooks/useTagManagement";
 import JsonPreviewModal from "./shared/JsonPreviewModal";
 import PublishConfirmModal from "./PublishConfirmModal";
@@ -75,12 +77,15 @@ export default function McpServiceDetailModal({
     McpDeploymentType.REMOTE_LINK
   );
   const [assignOpen, setAssignOpen] = useState(false);
+  const [tagPreviewRefreshKey, setTagPreviewRefreshKey] = useState(0);
+  const [tagManagementOpen, setTagManagementOpen] = useState(false);
   const { data: tagLibraries } = useTagLibraries();
   const defaultLibrary =
     tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
-  const { data: assignDefinitions } = useTagDefinitions(
-    defaultLibrary?.bucket_id ?? null
-  );
+  const {
+    data: assignDefinitions,
+    refresh: refreshAssignDefinitions,
+  } = useTagDefinitions(defaultLibrary?.bucket_id ?? null);
   const [containerPort, setContainerPort] = useState<number | undefined>();
 
   const detail = useMcpServiceDetail({ selectedService, onClose });
@@ -648,14 +653,29 @@ export default function McpServiceDetailModal({
               </p>
             ) : null}
 
-            <Button
-              size="small"
-              className="mb-2"
-              icon={<TagsOutlined />}
-              onClick={() => setAssignOpen(true)}
-            >
-              {t("mcpTools.action.assignTags")}
-            </Button>
+            <div className="mb-2 flex min-w-0 items-center gap-2">
+              <span className="shrink-0 text-sm font-medium text-slate-700">
+                {t("mcpTools.detail.tags")}
+              </span>
+              <div className="min-w-0 flex-1 overflow-hidden whitespace-nowrap">
+                <ResourceTagChips
+                  resourceType="mcp_service"
+                  resourceId={String(selectedService?.mcpId ?? "")}
+                  max={4}
+                  refreshKey={tagPreviewRefreshKey}
+                  singleLine
+                  emptyText={<span className="text-sm text-slate-400">—</span>}
+                />
+              </div>
+              <Button
+                type="link"
+                size="small"
+                icon={<TagsOutlined />}
+                onClick={() => setAssignOpen(true)}
+              >
+                {t("mcpTools.action.assignTags")}
+              </Button>
+            </div>
           </Form>
 
           <div className="flex flex-col gap-y-3 border-t border-slate-100 bg-white px-6 py-4">
@@ -729,11 +749,28 @@ export default function McpServiceDetailModal({
 
       <ResourceTagAssignmentModal
         open={assignOpen}
-        onClose={() => setAssignOpen(false)}
+        onClose={() => {
+          setAssignOpen(false);
+          setTagPreviewRefreshKey((current) => current + 1);
+        }}
         resourceType="mcp_service"
         resourceId={String(selectedService?.mcpId ?? "")}
         definitions={assignDefinitions ?? []}
         canEdit={true}
+        onManageDefinitions={() => {
+          setTagManagementOpen(true);
+        }}
+      />
+
+      <TagDefinitionManagementModal
+        open={tagManagementOpen}
+        onClose={() => {
+          setTagManagementOpen(false);
+          void refreshAssignDefinitions();
+        }}
+        bucketId={defaultLibrary?.bucket_id ?? 0}
+        bucketName={defaultLibrary?.bucket_name ?? ""}
+        canManage={true}
       />
 
       <PublishConfirmModal

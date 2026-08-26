@@ -156,9 +156,10 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
   const { data: tagLibraries } = useTagLibraries();
   const defaultLibrary =
     tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
-  const { data: assignDefinitions } = useTagDefinitions(
-    defaultLibrary?.bucket_id ?? null
-  );
+  const {
+    data: assignDefinitions,
+    refresh: refreshAssignDefinitions,
+  } = useTagDefinitions(defaultLibrary?.bucket_id ?? null);
 
   // Narrow the already-authorized knowledge base ids by tag predicates. The
   // tag service only intersects the caller's authorized set, so it never
@@ -398,20 +399,6 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
                 <SyncOutlined spin={syncLoading} style={{ color: "white" }} />
               </span>
               <span>{t("knowledgeBase.button.sync")}</span>
-            </Button>
-            <Button
-              style={{
-                padding: "4px 15px",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                flexShrink: 0,
-              }}
-              onClick={() => setTagManagementOpen(true)}
-              icon={<Tag />}
-            >
-              {t("knowledgeBase.button.tagManagement")}
             </Button>
             {showDataMateConfig && (
               <Button
@@ -782,11 +769,17 @@ const KnowledgeBaseList: React.FC<KnowledgeBaseListProps> = ({
         resourceId={assignTarget?.indexName ?? ""}
         definitions={assignDefinitions ?? []}
         canEdit={assignTarget?.canEdit ?? false}
+        onManageDefinitions={() => {
+          setTagManagementOpen(true);
+        }}
       />
 
       <TagDefinitionManagementModal
         open={tagManagementOpen}
-        onClose={() => setTagManagementOpen(false)}
+        onClose={() => {
+          setTagManagementOpen(false);
+          void refreshAssignDefinitions();
+        }}
         bucketId={defaultLibrary?.bucket_id ?? 0}
         bucketName={defaultLibrary?.bucket_name ?? ""}
         canManage={true}

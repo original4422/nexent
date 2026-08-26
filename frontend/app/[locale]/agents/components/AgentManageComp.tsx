@@ -35,6 +35,7 @@ export default function AgentManageComp() {
   const [importWizardData, setImportWizardData] =
     useState<ImportAgentData | null>(null);
   const [tagManagementOpen, setTagManagementOpen] = useState(false);
+  const [tagDefinitionsRefreshKey, setTagDefinitionsRefreshKey] = useState(0);
   const { data: tagLibraries } = useTagLibraries();
   const defaultLibrary =
     tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
@@ -194,7 +195,11 @@ export default function AgentManageComp() {
         </Row>
 
         <div className="flex-1 min-h-0">
-          <AgentList agentList={agentList} />
+          <AgentList
+            agentList={agentList}
+            onManageTagDefinitions={() => setTagManagementOpen(true)}
+            tagDefinitionsRefreshKey={tagDefinitionsRefreshKey}
+          />
         </div>
       </Flex>
 
@@ -215,7 +220,10 @@ export default function AgentManageComp() {
 
       <TagDefinitionManagementModal
         open={tagManagementOpen}
-        onClose={() => setTagManagementOpen(false)}
+        onClose={() => {
+          setTagManagementOpen(false);
+          setTagDefinitionsRefreshKey((current) => current + 1);
+        }}
         bucketId={defaultLibrary?.bucket_id ?? 0}
         bucketName={defaultLibrary?.bucket_name ?? ""}
         canManage={!isReadOnly}

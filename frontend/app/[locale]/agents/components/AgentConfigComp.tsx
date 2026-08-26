@@ -30,7 +30,6 @@ import {
   Plug,
   BlocksIcon,
   Globe,
-  Tag,
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
@@ -72,9 +71,10 @@ export default function AgentConfigComp() {
   const { data: tagLibraries } = useTagLibraries();
   const defaultLibrary =
     tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
-  const { data: assignDefinitions } = useTagDefinitions(
-    defaultLibrary?.bucket_id ?? null
-  );
+  const {
+    data: assignDefinitions,
+    refresh: refreshAssignDefinitions,
+  } = useTagDefinitions(defaultLibrary?.bucket_id ?? null);
   const { invalidate: invalidateExternalAgents } = useExternalAgents();
 
   const handleRefreshTools = useCallback(async () => {
@@ -152,23 +152,6 @@ export default function AgentConfigComp() {
               <h2 className="text-[16px] font-medium">
                 {t("businessLogic.config.title")}
               </h2>
-              {currentAgentId !== null && !isCreatingMode ? (
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<Tag size={15} />}
-                  disabled={isReadOnly}
-                  onClick={() => {
-                    setAssignTarget({
-                      resourceType: "agent",
-                      ids: [String(currentAgentId)],
-                    });
-                    setAssignTagsOpen(true);
-                  }}
-                >
-                  {t("agent.action.assignTags")}
-                </Button>
-              ) : null}
             </Flex>
           </Col>
         </Row>
@@ -406,11 +389,17 @@ export default function AgentConfigComp() {
         definitions={assignDefinitions ?? []}
         canEdit={!isReadOnly}
         bulkResourceIds={assignTarget.ids}
+        onManageDefinitions={() => {
+          setTagManagementOpen(true);
+        }}
       />
 
       <TagDefinitionManagementModal
         open={tagManagementOpen}
-        onClose={() => setTagManagementOpen(false)}
+        onClose={() => {
+          setTagManagementOpen(false);
+          void refreshAssignDefinitions();
+        }}
         bucketId={defaultLibrary?.bucket_id ?? 0}
         bucketName={defaultLibrary?.bucket_name ?? ""}
         canManage={!isReadOnly}
