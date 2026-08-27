@@ -352,7 +352,7 @@ export default function SkillDraftPanel({
                 </div>
                 {canAssignTags && onAssignTags ? (
                   <Button type="link" size="small" onClick={onAssignTags}>
-                    {t("tagManagement.title.assignTags")}
+                    {t("tagManagement.action.editTags")}
                   </Button>
                 ) : null}
               </div>

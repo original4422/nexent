@@ -82,10 +82,8 @@ export default function McpServiceDetailModal({
   const { data: tagLibraries } = useTagLibraries();
   const defaultLibrary =
     tagLibraries?.find((lib) => lib.bucket_key === "default_resource") ?? null;
-  const {
-    data: assignDefinitions,
-    refresh: refreshAssignDefinitions,
-  } = useTagDefinitions(defaultLibrary?.bucket_id ?? null);
+  const { data: assignDefinitions, refresh: refreshAssignDefinitions } =
+    useTagDefinitions(defaultLibrary?.bucket_id ?? null);
   const [containerPort, setContainerPort] = useState<number | undefined>();
 
   const detail = useMcpServiceDetail({ selectedService, onClose });
@@ -673,7 +671,7 @@ export default function McpServiceDetailModal({
                 icon={<TagsOutlined />}
                 onClick={() => setAssignOpen(true)}
               >
-                {t("mcpTools.action.assignTags")}
+                {t("tagManagement.action.editTags")}
               </Button>
             </div>
           </Form>

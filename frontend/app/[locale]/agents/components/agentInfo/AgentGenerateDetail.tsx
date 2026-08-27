@@ -981,7 +981,7 @@ export default function AgentGenerateDetail({}) {
                   onClick={() => setAssignTagsOpen(true)}
                   disabled={!editable || isGenerating}
                 >
-                  {t("agent.action.assignTags")}
+                  {t("tagManagement.action.editTags")}
                 </Button>
               ) : null}
               <Button

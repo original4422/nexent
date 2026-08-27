@@ -756,7 +756,7 @@ export default function AgentList({
                       </span>
                     </Tooltip>
 
-                    <Tooltip title={t("agent.action.assignTags")}>
+                    <Tooltip title={t("tagManagement.action.editTags")}>
                       <span>
                         <Button
                           type="text"
