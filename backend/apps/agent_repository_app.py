@@ -47,6 +47,10 @@ async def list_agent_repository_listings_api(
     search: Optional[str] = Query(
         None, description="Filter by name, description, author, or tags"
     ),
+    search_tag_predicates: Optional[str] = Query(
+        None,
+        description="Structured tag predicates that expand text search matches",
+    ),
     tag: Optional[str] = Query(None, description="Filter by an exact tag"),
     authorization: str = Header(None),
 ):
@@ -60,6 +64,9 @@ async def list_agent_repository_listings_api(
             "page_size": page_size,
             "search": search,
         }
+        search_predicates = _parse_tag_predicates(search_tag_predicates)
+        if search_predicates:
+            filters["search_tag_predicates"] = search_predicates
         if tag:
             filters["tag"] = tag
         result = list_agent_repository_listings_impl(tenant_id, **filters)
@@ -115,6 +122,10 @@ async def list_my_editable_agents_api(
         None,
         description="Structured tag predicates encoded as JSON",
     ),
+    search_tag_predicates: Optional[str] = Query(
+        None,
+        description="Structured tag predicates that expand text search matches",
+    ),
     authorization: str = Header(None),
 ):
     """List editable draft agents for the current user with repository listing info."""
@@ -133,6 +144,9 @@ async def list_my_editable_agents_api(
         predicates = _parse_tag_predicates(tag_predicates)
         if predicates:
             filters["tag_predicates"] = predicates
+        search_predicates = _parse_tag_predicates(search_tag_predicates)
+        if search_predicates:
+            filters["search_tag_predicates"] = search_predicates
         result = await list_my_editable_agents_impl(**filters)
         return JSONResponse(status_code=HTTPStatus.OK, content=result)
     except UnauthorizedError as e:

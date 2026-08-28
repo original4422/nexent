@@ -4522,6 +4522,8 @@
   "memory.longTerm.editorLabel": "Markdown 记忆编辑器",
   "group.deleted": "已删除的用户组",
   "tagManagement.title.assignTags": "标签",
+  "tagManagement.systemDefinition.agentCategory": "智能体类别",
+  "tagManagement.systemDefinition.keywords": "关键词",
   "tagManagement.title.bulkAssignTags": "批量编辑标签",
   "tagManagement.title.definitionManagement": "标签管理",
   "tagManagement.title.addDefinition": "新建标签",

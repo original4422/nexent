@@ -4525,6 +4525,8 @@
   "memory.longTerm.editorLabel": "Markdown memory editor",
   "group.deleted": "Deleted user group",
   "tagManagement.title.assignTags": "Tags",
+  "tagManagement.systemDefinition.agentCategory": "Agent Category",
+  "tagManagement.systemDefinition.keywords": "Keywords",
   "tagManagement.title.bulkAssignTags": "Bulk Edit Tags",
   "tagManagement.title.definitionManagement": "Tag Management",
   "tagManagement.title.addDefinition": "Add Tag",

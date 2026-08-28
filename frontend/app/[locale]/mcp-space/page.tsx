@@ -74,6 +74,9 @@ import { Popover } from "antd";
 import TagFilterControls from "@/components/tag/TagFilterControls";
 import RepositoryTagFilter from "@/components/tag/RepositoryTagFilter";
 import ResourceTagChips from "@/components/tag/ResourceTagChips";
+import {
+  getTagSearchPredicates,
+} from "@/lib/systemTagLabels";
 import type { TagResourcePredicate } from "@/types/tagManagement";
 import { tagManagementApi } from "@/services/tagManagementService";
 import AddMcpServiceCard from "./components/AddMcpServiceCard";
@@ -743,30 +746,10 @@ function MineView({
     [items, t]
   );
 
-  const searchTagPredicates = useMemo<TagResourcePredicate[]>(() => {
-    const keyword = search.trim().toLocaleLowerCase();
-    if (!keyword) return [];
-
-    return (mineTagDefinitions ?? []).flatMap((definition) => {
-      const definitionMatches = [
-        definition.definition_name,
-        definition.definition_key,
-      ].some((value) => value.toLocaleLowerCase().includes(keyword));
-      const valueIds = (definition.values ?? [])
-        .filter(
-          (value) =>
-            value.status === "active" &&
-            (definitionMatches ||
-              [value.display_value, value.normalized_value].some((candidate) =>
-                candidate.toLocaleLowerCase().includes(keyword)
-              ))
-        )
-        .map((value) => value.value_id);
-      return valueIds.length > 0
-        ? [{ definition_id: definition.definition_id, value_ids: valueIds }]
-        : [];
-    });
-  }, [mineTagDefinitions, search]);
+  const searchTagPredicates = useMemo(
+    () => getTagSearchPredicates(mineTagDefinitions, search, t),
+    [mineTagDefinitions, search, t]
+  );
 
   useEffect(() => {
     if (tagPredicates.length === 0) {
